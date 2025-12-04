@@ -43,7 +43,7 @@
  * 利用する際は、対象のスプレッドシートIDに書き換えてください。
  */
 
-const TARGET_SPREADSHEET_ID = "1e9adbHoIVCkUxFWxuHcRPrPeogozS0OWObi9zShkVFw";
+const TARGET_SPREADSHEET_ID = "貴方のスプレッドシートIDをここに入れてください";
 
 
 /**
