@@ -351,7 +351,7 @@ function testCompleteLockMechanism() {
     ["テスト2", "データ2", new Date()]
   ];
   
-  if (safeWriteToSheet(ssId, "Sheet1", "A1:C2", testData)) {
+  if (safeWriteToSheet(ssId, "test", "A1:C2", testData)) {
     Logger.log("✓ 安全な書き込み成功");
   } else {
     Logger.log("✗ 書き込み失敗");
