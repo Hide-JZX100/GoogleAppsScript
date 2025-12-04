@@ -1,9 +1,50 @@
+/**
+ * @fileoverview Google Apps Script (GAS) を用いたスプレッドシートの排他処理ライブラリ
+ *
+ * @description
+ * 複数のスクリプトやユーザーが同時にスプレッドシートを編集しようとすると発生する
+ * 競合状態（レースコンディション）を防ぐための排他制御（ロック）機構を提供します。
+ * スプレッドシートに特定の管理シート（デフォルト: `_LOCK_`）を作成し、
+ * そのシートの状態を読み書きすることでロックを実現します。
+ * GASの `LockService` と組み合わせることで、管理シートへのアクセス自体も保護し、信頼性を高めています。
+ *
+ * @usage
+ *
+ * ### ライブラリとして利用する場合 (推奨)
+ * 1. このスクリプトをGASプロジェクトとして保存し、[デプロイ] > [新しいデプロイ] からライブラリとしてデプロイします。
+ * 2. 別のGASプロジェクトで、[ライブラリ] > [+] からデプロイしたスクリプトのIDを追加します。(例: 識別子を `LockLib` とする)
+ * 3. `safeWriteToSheet` 関数や、`acquireSpreadsheetLockById` / `releaseSpreadsheetLockById` を使用して排他処理を実装します。
+ *
+ *    // 例:
+ *    const SPREADSHEET_ID = "YOUR_SPREADSHEET_ID";
+ *    if (LockLib.acquireSpreadsheetLockById(SPREADSHEET_ID)) {
+ *      try {
+ *        // ... ここに排他制御したい処理を記述 ...
+ *      } finally {
+ *        LockLib.releaseSpreadsheetLockById(SPREADSHEET_ID);
+ *      }
+ *    }
+ *
+ * ### スクリプトを直接コピーして利用する場合
+ * 1. このスクリプトの内容を、利用したいスプレッドシートのコンテナバインドスクリプトにコピーします。
+ * 2. `acquireSpreadsheetLock` / `releaseSpreadsheetLock` を使用して処理を囲みます。
+ *
+ * @functions
+ * - `acquireSpreadsheetLock`: コンテナバインドスクリプトで、現在開いているスプレッドシートのロックを取得します。
+ * - `acquireSpreadsheetLockById`: スプレッドシートIDを指定してロックを取得します。スタンドアロン環境や別ファイルからの操作に利用します。
+ * - `releaseSpreadsheetLock`: コンテナバインドスクリプトでロックを解放します。
+ * - `releaseSpreadsheetLockById`: スプレッドシートIDを指定してロックを解放します。
+ * - `safeWriteToSheet`: ロックの取得、処理の実行、ロックの解放をまとめて行う安全な書き込み関数です。基本的にはこの関数の利用を推奨します。
+ * - `forceUnlock`: 何らかのエラーでロックが残ってしまった場合に、強制的に解除するための関数です。
+ * - `testCompleteLockMechanism`: ロック機構全体の動作をテストするための関数です。
+ *
+ * @see
+ * このスクリプトは `TARGET_SPREADSHEET_ID` をテストおよび強制解除の際に使用します。
+ * 利用する際は、対象のスプレッドシートIDに書き換えてください。
+ */
+
 const TARGET_SPREADSHEET_ID = "1e9adbHoIVCkUxFWxuHcRPrPeogozS0OWObi9zShkVFw";
 
-/**
- * 【対象スプレッドシートのコンテナバインドスクリプト】
- * ロック管理用の共通ライブラリ
- */
 
 /**
  * スプレッドシート上でセマフォ(ロック)を取得する
