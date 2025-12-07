@@ -47,8 +47,8 @@ const TARGET_SPREADSHEET_ID = "貴方のスプレッドシートIDをここに�
 
 
 /**
- * スプレッドシート上でセマフォ(ロック)を取得する
- * コンテナバインドスクリプト用(getActiveSpreadsheet使用)
+ * スプレッドシート上でセマフォ(ロック)を取得する(キャッシュ対策版)
+ * コンテナバインドスクリプト用
  * @param {string} lockSheetName - ロック管理用シート名(デフォルト: "_LOCK_")
  * @param {number} timeoutSeconds - タイムアウト秒数(デフォルト: 30秒)
  * @returns {boolean} - ロック取得成功時true、失敗時false
@@ -70,35 +70,62 @@ function acquireSpreadsheetLock(lockSheetName = "_LOCK_", timeoutSeconds = 30) {
   var startTime = new Date().getTime();
   var projectName = ScriptApp.getScriptId();
   var userName = Session.getActiveUser().getEmail();
+  var retryCount = 0;
+  
+  Logger.log("【DEBUG】ロック取得開始: プロジェクト=" + projectName);
   
   while (true) {
+    retryCount++;
     var scriptLock = LockService.getScriptLock();
+    var hasScriptLock = false;
+    
     try {
-      scriptLock.waitLock(5000);
+      hasScriptLock = scriptLock.tryLock(100);
       
-      var lockStatus = lockSheet.getRange("A2").getValue();
-      var lockTime = lockSheet.getRange("B2").getValue();
+      if (!hasScriptLock) {
+        Logger.log("【DEBUG】リトライ" + retryCount + ": ScriptLock取得待機中...");
+        Utilities.sleep(100);
+        continue;
+      }
+      
+      Logger.log("【DEBUG】リトライ" + retryCount + ": ScriptLock取得成功");
+      
+      // ★★★ 重要: ループ内でスプレッドシートを再取得してキャッシュをクリア ★★★
+      SpreadsheetApp.flush();  // 保留中の変更を強制的に反映
+      var freshSs = SpreadsheetApp.getActiveSpreadsheet();
+      var freshLockSheet = freshSs.getSheetByName(lockSheetName);
+      
+      // 最新の値を取得
+      var lockStatus = freshLockSheet.getRange("A2").getValue();
+      var lockTime = freshLockSheet.getRange("B2").getValue();
+      
+      Logger.log("【DEBUG】_LOCKシート状態: " + lockStatus + " (時刻: " + lockTime + ")");
       
       if (lockStatus !== "LOCKED" || isLockExpired(lockTime, 300)) {
-        lockSheet.getRange("A2").setValue("LOCKED");
-        lockSheet.getRange("B2").setValue(new Date());
-        lockSheet.getRange("C2").setValue(projectName);
-        lockSheet.getRange("D2").setValue(userName);
+        // ロックを取得
+        freshLockSheet.getRange("A2").setValue("LOCKED");
+        freshLockSheet.getRange("B2").setValue(new Date());
+        freshLockSheet.getRange("C2").setValue(projectName);
+        freshLockSheet.getRange("D2").setValue(userName);
         SpreadsheetApp.flush();
         
-        Logger.log("ロック取得成功: " + projectName + " by " + userName);
+        Logger.log("【DEBUG】ロック取得成功: " + projectName + " (リトライ回数: " + retryCount + ")");
         return true;
+      } else {
+        Logger.log("【DEBUG】リトライ" + retryCount + ": 他のプロジェクトがロック保持中");
       }
       
     } catch (e) {
-      Logger.log("シート操作エラー: " + e);
+      Logger.log("【DEBUG】シート操作エラー: " + e);
     } finally {
-      scriptLock.releaseLock();
+      if (hasScriptLock) {
+        scriptLock.releaseLock();
+      }
     }
     
     var elapsedTime = (new Date().getTime() - startTime) / 1000;
     if (elapsedTime > timeoutSeconds) {
-      Logger.log("ロック取得タイムアウト: " + projectName);
+      Logger.log("【DEBUG】ロック取得タイムアウト: " + projectName + " (リトライ回数: " + retryCount + ", 経過時間: " + elapsedTime.toFixed(2) + "秒)");
       return false;
     }
     
@@ -107,7 +134,7 @@ function acquireSpreadsheetLock(lockSheetName = "_LOCK_", timeoutSeconds = 30) {
 }
 
 /**
- * スプレッドシートIDを指定してロックを取得
+ * スプレッドシートIDを指定してロックを取得(キャッシュ対策版)
  * 別プロジェクトから特定のスプレッドシートにアクセスする場合に使用
  * @param {string} spreadsheetId - 対象スプレッドシートのID
  * @param {string} lockSheetName - ロック管理用シート名(デフォルト: "_LOCK_")
@@ -115,10 +142,17 @@ function acquireSpreadsheetLock(lockSheetName = "_LOCK_", timeoutSeconds = 30) {
  * @returns {boolean} - ロック取得成功時true、失敗時false
  */
 function acquireSpreadsheetLockById(spreadsheetId, lockSheetName = "_LOCK_", timeoutSeconds = 30) {
+  var startTime = new Date().getTime();
+  var projectName = ScriptApp.getScriptId();
+  var userName = Session.getActiveUser().getEmail();
+  var retryCount = 0;
+  
+  Logger.log("【DEBUG】ロック取得開始: プロジェクト=" + projectName);
+  
+  // 初回のシート確認と作成
   var ss = SpreadsheetApp.openById(spreadsheetId);
   var lockSheet = ss.getSheetByName(lockSheetName);
   
-  // ロック管理シートが存在しない場合は作成
   if (!lockSheet) {
     lockSheet = ss.insertSheet(lockSheetName);
     lockSheet.getRange("A1").setValue("ロック状態");
@@ -126,40 +160,59 @@ function acquireSpreadsheetLockById(spreadsheetId, lockSheetName = "_LOCK_", tim
     lockSheet.getRange("C1").setValue("プロジェクト名");
     lockSheet.getRange("D1").setValue("実行ユーザー");
     lockSheet.hideSheet();
+    SpreadsheetApp.flush();
   }
   
-  var startTime = new Date().getTime();
-  var projectName = ScriptApp.getScriptId();
-  var userName = Session.getActiveUser().getEmail();
-  
   while (true) {
+    retryCount++;
     var scriptLock = LockService.getScriptLock();
+    var hasScriptLock = false;
+    
     try {
-      scriptLock.waitLock(5000);
+      hasScriptLock = scriptLock.tryLock(100);
       
-      var lockStatus = lockSheet.getRange("A2").getValue();
-      var lockTime = lockSheet.getRange("B2").getValue();
+      if (!hasScriptLock) {
+        Logger.log("【DEBUG】リトライ" + retryCount + ": ScriptLock取得待機中...");
+        Utilities.sleep(100);
+        continue;
+      }
+      
+      Logger.log("【DEBUG】リトライ" + retryCount + ": ScriptLock取得成功");
+      
+      // ★★★ 重要: ループ内でスプレッドシートを再取得 ★★★
+      SpreadsheetApp.flush();
+      var freshSs = SpreadsheetApp.openById(spreadsheetId);
+      var freshLockSheet = freshSs.getSheetByName(lockSheetName);
+      
+      var lockStatus = freshLockSheet.getRange("A2").getValue();
+      var lockTime = freshLockSheet.getRange("B2").getValue();
+      
+      Logger.log("【DEBUG】_LOCKシート状態: " + lockStatus + " (時刻: " + lockTime + ")");
       
       if (lockStatus !== "LOCKED" || isLockExpired(lockTime, 300)) {
-        lockSheet.getRange("A2").setValue("LOCKED");
-        lockSheet.getRange("B2").setValue(new Date());
-        lockSheet.getRange("C2").setValue(projectName);
-        lockSheet.getRange("D2").setValue(userName);
+        freshLockSheet.getRange("A2").setValue("LOCKED");
+        freshLockSheet.getRange("B2").setValue(new Date());
+        freshLockSheet.getRange("C2").setValue(projectName);
+        freshLockSheet.getRange("D2").setValue(userName);
         SpreadsheetApp.flush();
         
-        Logger.log("ロック取得成功: " + projectName + " by " + userName);
+        Logger.log("【DEBUG】ロック取得成功: " + projectName + " (リトライ回数: " + retryCount + ")");
         return true;
+      } else {
+        Logger.log("【DEBUG】リトライ" + retryCount + ": 他のプロジェクトがロック保持中");
       }
       
     } catch (e) {
-      Logger.log("シート操作エラー: " + e);
+      Logger.log("【DEBUG】シート操作エラー: " + e);
     } finally {
-      scriptLock.releaseLock();
+      if (hasScriptLock) {
+        scriptLock.releaseLock();
+      }
     }
     
     var elapsedTime = (new Date().getTime() - startTime) / 1000;
     if (elapsedTime > timeoutSeconds) {
-      Logger.log("ロック取得タイムアウト: " + projectName);
+      Logger.log("【DEBUG】ロック取得タイムアウト: " + projectName + " (リトライ回数: " + retryCount + ", 経過時間: " + elapsedTime.toFixed(2) + "秒)");
       return false;
     }
     
@@ -227,17 +280,22 @@ function releaseSpreadsheetLockById(spreadsheetId, lockSheetName = "_LOCK_") {
 }
 
 /**
- * ロックがタイムアウトしているか確認
+ * ロックがタイムアウトしているか確認(デバッグ版)
  * @param {Date} lockTime - ロック取得時刻
  * @param {number} timeoutSeconds - タイムアウト秒数(デフォルト: 300秒=5分)
  * @returns {boolean} - タイムアウト時true
  */
 function isLockExpired(lockTime, timeoutSeconds = 300) {
-  if (!lockTime) return true;
+  if (!lockTime) {
+    Logger.log("【DEBUG】isLockExpired: lockTimeが空 → true");
+    return true;
+  }
   
   var now = new Date().getTime();
   var lockTimestamp = new Date(lockTime).getTime();
   var elapsedSeconds = (now - lockTimestamp) / 1000;
+  
+  Logger.log("【DEBUG】isLockExpired: 経過時間=" + elapsedSeconds.toFixed(2) + "秒, タイムアウト=" + timeoutSeconds + "秒");
   
   return elapsedSeconds > timeoutSeconds;
 }
