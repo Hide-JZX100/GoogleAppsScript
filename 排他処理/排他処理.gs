@@ -359,3 +359,51 @@ function testCompleteLockMechanism() {
   
   Logger.log("=== 全テスト完了 ===");
 }
+
+/**
+ * コンテナバインドスクリプトで直接テスト
+ * スプレッドシートに直接バインドして実行
+ */
+function directTest_ProjectA() {
+  Logger.log("=== 直接テストA: 開始 ===");
+  
+  if (acquireSpreadsheetLock("_LOCK_", 30)) {
+    Logger.log("ロック取得成功");
+    
+    try {
+      var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("test");
+      
+      for (var i = 1; i <= 5; i++) {
+        sheet.getRange("A" + i).setValue("DirectA-" + new Date().toLocaleTimeString());
+        Logger.log(i + "行目書き込み");
+        Utilities.sleep(1000);
+      }
+      
+    } finally {
+      releaseSpreadsheetLock("_LOCK_");
+      Logger.log("ロック解放");
+    }
+  }
+}
+
+function directTest_ProjectB() {
+  Logger.log("=== 直接テストB: 開始 ===");
+  
+  if (acquireSpreadsheetLock("_LOCK_", 30)) {
+    Logger.log("ロック取得成功");
+    
+    try {
+      var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("test");
+      
+      for (var i = 1; i <= 5; i++) {
+        sheet.getRange("B" + i).setValue("DirectB-" + new Date().toLocaleTimeString());
+        Logger.log(i + "行目書き込み");
+        Utilities.sleep(1000);
+      }
+      
+    } finally {
+      releaseSpreadsheetLock("_LOCK_");
+      Logger.log("ロック解放");
+    }
+  }
+}
