@@ -7,8 +7,11 @@ const TARGET_SPREADSHEET_ID = "1e9adbHoIVCkUxFWxuHcRPrPeogozS0OWObi9zShkVFw";
 function testFromProjectB() {
   Logger.log("=== プロジェクトB: 書き込み開始 ===");
   
-  if (LockLib.acquireSpreadsheetLockById(TARGET_SPREADSHEET_ID, "_LOCK_", 15)) {
-    Logger.log("プロジェクトB: ロック取得成功");
+  // ★ 重要: lockIdを受け取る
+  var lockId = LockLib.acquireSpreadsheetLockById(TARGET_SPREADSHEET_ID);
+  
+  if (lockId) {  // ★ nullチェック
+    Logger.log("プロジェクトB: ロック取得成功 (ID: " + lockId + ")");
     
     try {
       var ss = SpreadsheetApp.openById(TARGET_SPREADSHEET_ID);
