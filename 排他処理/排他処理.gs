@@ -24,14 +24,28 @@
  * 3. `safeWriteToSheet` 関数や、`acquireSpreadsheetLockById` / `releaseSpreadsheetLockById` を使用して排他処理を実装します。
  *
  *    // 例:
- *    const SPREADSHEET_ID = "YOUR_SPREADSHEET_ID";
- *    if (LockLib.acquireSpreadsheetLockById(SPREADSHEET_ID)) {
- *      try {
- *        // ... ここに排他制御したい処理を記述 ...
- *      } finally {
- *        LockLib.releaseSpreadsheetLockById(SPREADSHEET_ID);
- *      }
- *    }
+
+const TARGET_SPREADSHEET_ID = "貴方のスプレッドシートIDをここに入れてください";
+
+function testFromProjectA() {
+  
+  // ★ 重要: lockIdを受け取る
+  var lockId = LockLib.acquireSpreadsheetLockById(TARGET_SPREADSHEET_ID);
+  
+  if (lockId) {  // ★ nullチェック
+    
+    try {
+         // ... ここに排他制御したい処理を記述 ...
+
+    } finally {
+      LockLib.releaseSpreadsheetLockById(TARGET_SPREADSHEET_ID, lockId);
+      Logger.log("プロジェクトA: ロック解放");
+    }
+  } else {
+    Logger.log("プロジェクトA: ロック取得失敗");
+  }
+}
+         
  *
  * ### スクリプトを直接コピーして利用する場合
  * 1. このスクリプトの内容を、利用したいスプレッドシートのコンテナバインドスクリプトにコピーします。
