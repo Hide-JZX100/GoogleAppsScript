@@ -14,7 +14,6 @@ function GetActiveCd() {
     
     // 定数定義
     var ITEM_CODE_START_ROW = 12;
-    var BEDDING_VENDORS = ["0009", "0023", "0028", "0031", "0032"];
     
     // 照会情報クリア
     var r1 = sheet2.getLastRow();
