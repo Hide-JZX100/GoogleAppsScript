@@ -2,7 +2,7 @@
  * プロジェクトBからの書き込みテスト
  * testFromProjectA実行中に実行してください
  */
-const TARGET_SPREADSHEET_ID = "1e9adbHoIVCkUxFWxuHcRPrPeogozS0OWObi9zShkVFw";
+const TARGET_SPREADSHEET_ID = "貴方のスプレッドシートIDをここに入れてください";
 
 function testFromProjectB() {
   Logger.log("=== プロジェクトB: 書き込み開始 ===");
